@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seni Masofadan Bo‘lsa Ham Sevaman — Even From Afar</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{ink:'#0b0709',wine:'#7a1f3d',rose:'#d68aa0',cream:'#f5ece6'},fontFamily:{serif:['Fraunces','Georgia','serif'],sans:['Inter','system-ui','sans-serif']}}}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+body{background:radial-gradient(900px 500px at 15% -10%,rgba(122,31,61,.35),transparent),radial-gradient(700px 500px at 100% 20%,rgba(88,40,110,.25),transparent),#0b0709;color:#f5ece6;font-family:Inter,system-ui,sans-serif;min-height:100vh}
+.glass{background:rgba(255,255,255,.05);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);border-radius:24px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.fade{animation:fade .5s ease both}@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.line{background:linear-gradient(90deg,transparent,#d68aa0,transparent);background-size:200% 100%;animation:sweep 3s linear infinite}@keyframes sweep{to{background-position:-200% 0}}
+.orb{box-shadow:0 0 30px rgba(214,138,160,.5);animation:breathe 3s ease-in-out infinite}@keyframes breathe{50%{box-shadow:0 0 50px rgba(214,138,160,.8)}}
+.speak{box-shadow:0 0 0 3px rgba(214,138,160,.9),0 0 24px rgba(214,138,160,.8)}
+.heart{position:fixed;left:50%;top:40%;font-size:64px;color:#d68aa0;animation:rise 1.8s ease-out forwards;pointer-events:none;z-index:60}
+@keyframes rise{from{opacity:0;transform:translate(-50%,20px) scale(.6)}30%{opacity:1}to{opacity:0;transform:translate(-50%,-90px) scale(1.2)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+const socket=io({autoConnect:false});
+const cls=(...a)=>a.filter(Boolean).join(' ');
+const ERR={full:'This little room is already full.','not-found':"We couldn't find that room.",password:'That password is not right.',name:'Please tell us your name.'};
+const parseId=s=>(String(s).trim().match(/([A-Za-z0-9]{6})\/?$/)||[])[1]?.toUpperCase()||'';
+
+const Btn=({v='ghost',className,...p})=><button {...p} className={cls('rounded-full px-5 py-2.5 text-sm font-medium transition active:scale-95 disabled:opacity-40',v==='primary'?'bg-gradient-to-r from-wine to-[#a3324f] text-cream shadow-lg shadow-wine/30 hover:brightness-110':v==='danger'?'bg-red-900/40 border border-red-400/20 hover:bg-red-900/60':'bg-white/5 border border-white/10 hover:bg-white/10',className)}/>;
+const Field=({label,...p})=><label className="block text-sm text-cream/60 mb-4">{label}<input {...p} className="mt-1.5 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-cream outline-none focus:border-rose/60"/></label>;
+const Vid=({stream,...p})=>{const r=useRef();useEffect(()=>{if(r.current)r.current.srcObject=stream||null},[stream]);return <video ref={r} autoPlay playsInline {...p}/>};
+const Aud=({stream})=>{const r=useRef();useEffect(()=>{if(r.current)r.current.srcObject=stream||null},[stream]);return <audio ref={r} autoPlay/>};
+
+function useSpeaking(stream){
+  const [on,set]=useState(false);
+  useEffect(()=>{
+    if(!stream||!stream.getAudioTracks().length){set(false);return}
+    const ctx=new (window.AudioContext||window.webkitAudioContext)(),an=ctx.createAnalyser();an.fftSize=512;
+    ctx.createMediaStreamSource(stream).connect(an);const b=new Uint8Array(an.fftSize);
+    const id=setInterval(()=>{an.getByteTimeDomainData(b);let m=0;for(const v of b)m=Math.max(m,Math.abs(v-128));set(m>12)},150);
+    return()=>{clearInterval(id);ctx.close()};
+  },[stream]);
+  return on;
+}
+
+/* ---------- Landing ---------- */
+const Orb=()=><div className="orb h-14 w-14 rounded-full bg-gradient-to-br from-rose to-wine"/>;
+function Home({go}){
+  const steps=[['Create a room','Pick a name, get a private link.'],['Send it to your person','The room holds exactly two.'],['Press play together','Share your screen, talk, and chat.']];
+  const feats=[['🖥','Screen sharing','Watch anything you already own.'],['🎙','Voice','Peer-to-peer, no recording.'],['💬','Live chat','Private, never stored.'],['🔒','Two people only','Optional room password.']];
+  return <div className="fade">
+    <header className="flex items-center justify-between px-5 md:px-10 py-5">
+      <div className="font-serif text-lg">♡ <span className="hidden sm:inline">Seni Masofadan Bo‘lsa Ham Sevaman</span></div>
+      <nav className="hidden md:flex gap-6 text-sm text-cream/70"><a href="#how" className="hover:text-cream">How It Works</a><a href="#features" className="hover:text-cream">Features</a><button onClick={()=>go('create')} className="hover:text-cream">Create Room</button><button onClick={()=>go('join')} className="hover:text-cream">Join Room</button></nav>
+      <Btn v="primary" onClick={()=>go('create')}>Create a Room</Btn>
+    </header>
+    <section className="text-center px-5 pt-16 md:pt-24 pb-16 max-w-4xl mx-auto">
+      <h1 className="font-serif text-4xl md:text-6xl leading-tight">Masofa uzoq bo‘lishi mumkin.<br/><span className="text-rose italic">Lekin birga vaqt o‘tkazish uchun emas.</span></h1>
+      <p className="mt-4 text-cream/50 italic">Even from afar, we can still be together.</p>
+      <p className="mt-6 text-cream/75 max-w-xl mx-auto">Watch something together, talk, laugh, and spend time with the person who matters to you — wherever you are.</p>
+      <div className="flex items-center justify-center max-w-xs mx-auto my-10"><Orb/><div className="line h-px flex-1 mx-3"/><Orb/></div>
+      <div className="flex flex-wrap gap-3 justify-center"><Btn v="primary" onClick={()=>go('create')}>♡ Create Our Room</Btn><Btn onClick={()=>go('join')}>Join Their Room</Btn></div>
+      <p className="mt-6 font-serif text-cream/50">“Masofa uzoq bo‘lishi mumkin. Birga bo‘lish hissi emas.”</p>
+    </section>
+    <section id="how" className="px-5 max-w-5xl mx-auto grid md:grid-cols-3 gap-4 py-10">{steps.map(([t,d],i)=><div key={t} className="glass p-6"><div className="font-serif text-rose text-2xl">0{i+1}</div><div className="mt-2 font-medium">{t}</div><div className="text-sm text-cream/60 mt-1">{d}</div></div>)}</section>
+    <section id="features" className="px-5 max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 pb-16">{feats.map(([i,t,d])=><div key={t} className="glass p-5"><div className="text-2xl">{i}</div><div className="mt-2 font-medium">{t}</div><div className="text-sm text-cream/60 mt-1">{d}</div></div>)}</section>
+    <footer className="text-center pb-10 text-cream/40 text-sm font-serif">Seni masofadan bo‘lsa ham sevaman. · Even from afar, I love you.</footer>
+  </div>;
+}
+
+/* ---------- Create / Invite / Join ---------- */
+const Shell=({children,back})=><div className="min-h-screen grid place-items-center px-4 fade"><div className="glass p-7 w-full max-w-md relative"><button onClick={back} className="text-sm text-cream/50 hover:text-cream mb-4">← Back</button>{children}</div></div>;
+
+function Create({back,onCreated}){
+  const [f,setF]=useState({name:'',roomName:'',password:''}),[busy,setBusy]=useState(false),[err,setErr]=useState('');
+  const set=k=>e=>setF({...f,[k]:e.target.value});
+  const submit=async()=>{setBusy(true);setErr('');try{const r=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(f)});const j=await r.json();if(!r.ok)throw 0;
+    sessionStorage.setItem('msb:'+j.roomId,JSON.stringify({userId:j.userId,name:f.name}));onCreated(j.roomId,f)}catch{setErr('Could not create the room. Is the server running?');setBusy(false)}};
+  return <Shell back={back}><h2 className="font-serif text-2xl mb-1">Create your private room</h2><p className="text-sm text-cream/50 mb-6">Maximum participants: 2</p>
+    <Field label="Your name" value={f.name} onChange={set('name')} maxLength={24} placeholder="Alex"/>
+    <Field label="Room name" value={f.roomName} onChange={set('roomName')} maxLength={40} placeholder="Our Room"/>
+    <Field label="Password (optional)" type="password" value={f.password} onChange={set('password')}/>
+    {err&&<p className="text-sm text-red-300 mb-3">{err}</p>}
+    <Btn v="primary" className="w-full" disabled={!f.name.trim()||busy} onClick={submit}>{busy?'Creating…':'Create Room'}</Btn></Shell>;
+}
+function Invite({roomId,enter,back}){
+  const link=location.origin+'/room/'+roomId,[copied,setC]=useState(false);
+  return <Shell back={back}><h2 className="font-serif text-2xl mb-1">Your room is ready</h2><p className="text-cream/60 mb-5">Send this link to your person.</p>
+    <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm break-all font-mono">{link}</div>
+    <div className="flex gap-3 mt-5"><Btn className="flex-1" onClick={()=>{navigator.clipboard?.writeText(link);setC(true);setTimeout(()=>setC(false),1800)}}>{copied?'Copied ✓':'Copy Invite Link'}</Btn><Btn v="primary" className="flex-1" onClick={enter}>Enter Room</Btn></div></Shell>;
+}
+function Join({initial,error,back,onJoin}){
+  const [id,setId]=useState(initial||''),[name,setName]=useState(''),[pw,setPw]=useState('');
+  const rid=parseId(id);
+  return <Shell back={back}><h2 className="font-serif text-2xl mb-6">Join their room</h2>
+    <Field label="Room link or ID" value={id} onChange={e=>setId(e.target.value)} placeholder="ABX729"/>
+    <Field label="What's your name?" value={name} onChange={e=>setName(e.target.value)} maxLength={24} placeholder="Sam"/>
+    <Field label="Password (if they set one)" type="password" value={pw} onChange={e=>setPw(e.target.value)}/>
+    {error&&<p className="text-sm text-red-300 mb-3">{error}</p>}
+    <Btn v="primary" className="w-full" disabled={!rid||!name.trim()} onClick={()=>onJoin(rid,name.trim(),pw)}>Join Room</Btn></Shell>;
+}
+
+/* ---------- Watch room ---------- */
+function Avatar({u,speaking}){
+  return <div className="flex items-center gap-2"><div className={cls('h-9 w-9 rounded-full grid place-items-center bg-gradient-to-br from-wine to-[#a3324f] font-medium transition',speaking&&'speak')}>{u.avatar}</div>
+    <div className="leading-tight"><div className="text-sm">{u.displayName} <span className={u.connected?'text-emerald-400':'text-cream/30'}>●</span></div><div className="text-xs text-cream/50">{!u.connected?'offline':(u.isMuted?'🔇':'🎙')+(u.isCameraOn?' 📷':'')}</div></div></div>;
+}
+function Tile({stream,label,muted,mirror,speaking,avatar,className}){
+  return <div className={cls('relative overflow-hidden rounded-2xl bg-ink border border-white/15 shadow-xl',speaking&&'speak',className)}>
+    {stream?<Vid stream={stream} muted={muted} className={cls('w-full h-full object-cover',mirror&&'[transform:scaleX(-1)]')}/>
+      :<div className="w-full h-full grid place-items-center bg-gradient-to-br from-wine/40 to-ink"><div className="h-12 w-12 rounded-full bg-wine/70 grid place-items-center text-xl">{avatar}</div></div>}
+    <div className="absolute bottom-1 left-2 text-[11px] bg-black/50 rounded-full px-2">{label}</div></div>;
+}
+function Pip({children}){            // draggable floating picture-in-picture stack
+  const [pos,setPos]=useState({x:0,y:0}),d=useRef(null);
+  return <div className="absolute right-3 bottom-3 z-10 flex flex-col gap-2 touch-none cursor-grab" style={{transform:`translate(${pos.x}px,${pos.y}px)`}}
+    onPointerDown={e=>{d.current={x:e.clientX-pos.x,y:e.clientY-pos.y};e.currentTarget.setPointerCapture(e.pointerId)}}
+    onPointerMove={e=>d.current&&setPos({x:e.clientX-d.current.x,y:e.clientY-d.current.y})}
+    onPointerUp={()=>{d.current=null}}>{children}</div>;
+}
+
+function Room({roomId,name,password,onLeave,onError}){
+  const key='msb:'+roomId,R=useRef({uid:JSON.parse(sessionStorage.getItem(key)||'{}').userId,senders:[],camSenders:[]}).current;
+  const [room,setRoom]=useState(null),[msgs,setMsgs]=useState([]),[text,setText]=useState(''),[link,setLink]=useState('connecting'),[toast,setToast]=useState(''),[heart,setHeart]=useState(0);
+  const [micOn,setMicOn]=useState(false),[muted,setMuted]=useState(false),[sharing,setSharing]=useState(false);
+  const [lScreen,setLScreen]=useState(null),[lCam,setLCam]=useState(null),[lMic,setLMic]=useState(null),[rScreen,setRScreen]=useState(null),[rCam,setRCam]=useState(null),[rMic,setRMic]=useState(null);
+  const [help,setHelp]=useState(true),[settings,setSettings]=useState(false),[sf,setSf]=useState({}),endRef=useRef(),stageRef=useRef();
+  const mySpeak=useSpeaking(lMic),theirSpeak=useSpeaking(rMic);
+  const flash=t=>{setToast(t);clearTimeout(R.tt);R.tt=setTimeout(()=>setToast(''),3500)};
+  const upd=(uid,p)=>setRoom(r=>r&&({...r,users:r.users.map(u=>u.userId===uid?{...u,...p}:u)}));
+
+  function makePC(otherUid){
+    if(R.pc){R.pc.onnegotiationneeded=R.pc.ontrack=R.pc.onicecandidate=null;R.pc.close()}
+    const pc=R.pc=new RTCPeerConnection({iceServers:R.ice||[{urls:'stun:stun.l.google.com:19302'}]});
+    R.polite=R.uid>otherUid;R.making=false;R.ignore=false;R.senders=[];R.camSenders=[];
+    pc.onicecandidate=e=>e.candidate&&socket.emit('ice-candidate',{candidate:e.candidate});
+    pc.onnegotiationneeded=async()=>{try{R.making=true;await pc.setLocalDescription();socket.emit('webrtc-offer',{description:pc.localDescription})}catch(e){console.error(e)}finally{R.making=false}};
+    pc.ontrack=e=>{const s=e.streams[0];if(!s)return;
+      if(e.track.kind==='audio'){if(s.id!==R.screenId)setRMic(s);return}   // screen audio plays via the screen <video>
+      s.id===R.screenId?setRScreen(s):setRCam(s)};
+    pc.onconnectionstatechange=()=>{setLink(pc.connectionState);if(pc.connectionState==='failed')pc.restartIce()};
+    // announce which stream is which BEFORE tracks/offer (same ordered socket)
+    if(R.screen)socket.emit('screen-share-started',{streamId:R.screen.id});
+    if(R.cam)socket.emit('camera-enabled',{streamId:R.cam.id});
+    if(R.mic)socket.emit(R.mic.getAudioTracks()[0].enabled?'voice-enabled':'voice-disabled',{});
+    R.cam?.getTracks().forEach(t=>R.camSenders.push(pc.addTrack(t,R.cam)));
+    R.mic?.getTracks().forEach(t=>pc.addTrack(t,R.mic));
+    R.screen?.getTracks().forEach(t=>R.senders.push(pc.addTrack(t,R.screen)));
+  }
+  function closePC(){if(R.pc){R.pc.onnegotiationneeded=R.pc.ontrack=R.pc.onicecandidate=null;R.pc.close();R.pc=null}setRScreen(null);setRCam(null);setRMic(null);R.screenId=null}
+  async function handleDesc(d){
+    const pc=R.pc;if(!pc)return;
+    try{const coll=d.type==='offer'&&(R.making||pc.signalingState!=='stable');R.ignore=!R.polite&&coll;if(R.ignore)return;
+      await pc.setRemoteDescription(d);if(d.type==='offer'){await pc.setLocalDescription();socket.emit('webrtc-answer',{description:pc.localDescription})}}catch(e){console.error(e)}
+  }
+
+  useEffect(()=>{
+    const doJoin=()=>{setLink('connecting');socket.emit('join-room',{roomId,name,password,userId:R.uid},res=>{
+      if(!res?.ok)return onError(res?.error||'not-found');
+      R.uid=res.userId;sessionStorage.setItem(key,JSON.stringify({userId:res.userId,name}));setRoom(res.room);
+      const o=res.room.users.find(u=>u.userId!==R.uid&&u.connected);if(o){makePC(o.userId);flash("You're together again.");setHeart(h=>h+1)}else setLink('connected')})};
+    socket.on('connect',doJoin);
+    socket.on('disconnect',()=>{setLink('disconnected');closePC()});
+    socket.on('user-joined',({userId,reconnected,room})=>{setRoom(room);makePC(userId);flash(reconnected?"They're back ❤️":'Someone special just arrived ❤️');setHeart(h=>h+1)});
+    socket.on('user-left',({room})=>{setRoom(room);closePC();flash("They've left the room.")});
+    socket.on('room-update',setRoom);
+    socket.on('webrtc-offer',({description})=>handleDesc(description));
+    socket.on('webrtc-answer',({description})=>handleDesc(description));
+    socket.on('ice-candidate',async({candidate})=>{try{await R.pc?.addIceCandidate(candidate)}catch(e){if(!R.ignore)console.error(e)}});
+    socket.on('screen-share-started',({from,streamId})=>{R.screenId=streamId;upd(from,{isScreenSharing:true})});
+    socket.on('screen-share-stopped',({from})=>{setRScreen(null);upd(from,{isScreenSharing:false})});
+    socket.on('camera-enabled',({from})=>upd(from,{isCameraOn:true}));
+    socket.on('camera-disabled',({from})=>{setRCam(null);upd(from,{isCameraOn:false})});
+    socket.on('voice-enabled',({from})=>upd(from,{isMuted:false}));
+    socket.on('voice-disabled',({from})=>upd(from,{isMuted:true}));
+    socket.on('chat-message',m=>setMsgs(a=>[...a,m]));
+    fetch('/api/ice').then(r=>r.json()).then(j=>{R.ice=j.iceServers}).catch(()=>{}).finally(()=>{if(!R.dead)socket.connect()});
+    return()=>{R.dead=true;socket.removeAllListeners();socket.disconnect();[R.mic,R.cam,R.screen].forEach(s=>s?.getTracks().forEach(t=>t.stop()));R.pc?.close()};
+  },[]);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:'smooth'})},[msgs]);
+
+  const needSecure=()=>{if(navigator.mediaDevices)return false;flash('Camera, mic and screen sharing need HTTPS (see the banner above).');return true};
+  async function toggleVoice(){
+    if(needSecure())return;
+    if(!R.mic){
+      try{R.mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}catch{return flash('Microphone permission was denied.')}
+      R.mic.getTracks().forEach(t=>R.pc?.addTrack(t,R.mic));setLMic(R.mic);setMicOn(true);setMuted(false);upd(R.uid,{isMuted:false});socket.emit('voice-enabled',{});return}
+    const t=R.mic.getAudioTracks()[0];t.enabled=!t.enabled;setMuted(!t.enabled);upd(R.uid,{isMuted:!t.enabled});socket.emit(t.enabled?'voice-enabled':'voice-disabled',{});
+  }
+  async function toggleCamera(){
+    if(R.cam)return stopCam();
+    if(needSecure())return;
+    try{const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'}});
+      R.cam=s;setLCam(s);upd(R.uid,{isCameraOn:true});socket.emit('camera-enabled',{streamId:s.id});
+      R.camSenders=s.getTracks().map(t=>R.pc?.addTrack(t,s)).filter(Boolean);s.getVideoTracks()[0].onended=stopCam}
+    catch(e){flash(e.name==='NotAllowedError'?'Camera permission was denied.':'Could not start the camera.')}
+  }
+  function stopCam(){
+    const s=R.cam;if(!s)return;s.getTracks().forEach(t=>t.stop());R.camSenders.forEach(x=>{try{R.pc?.removeTrack(x)}catch{}});R.camSenders=[];R.cam=null;
+    setLCam(null);upd(R.uid,{isCameraOn:false});socket.emit('camera-disabled',{});
+  }
+  async function share(){
+    if(R.screen)return stopShare();
+    if(needSecure())return;
+    try{const s=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:true});R.screen=s;setSharing(true);setLScreen(s);setHelp(false);
+      try{s.getVideoTracks()[0].contentHint='motion'}catch{}
+      socket.emit('screen-share-started',{streamId:s.id});upd(R.uid,{isScreenSharing:true});
+      R.senders=s.getTracks().map(t=>R.pc?.addTrack(t,s)).filter(Boolean);s.getVideoTracks()[0].onended=stopShare}
+    catch(e){if(e.name!=='NotAllowedError')flash('Could not start screen sharing here.')}
+  }
+  function stopShare(){
+    const s=R.screen;if(!s)return;s.getTracks().forEach(t=>t.stop());R.senders.forEach(x=>{try{R.pc?.removeTrack(x)}catch{}});R.senders=[];R.screen=null;
+    setSharing(false);setLScreen(null);upd(R.uid,{isScreenSharing:false});socket.emit('screen-share-stopped',{});
+  }
+  const send=()=>{const t=text.trim();if(t){socket.emit('chat-message',{text:t});setText('')}};
+  const copy=()=>{navigator.clipboard?.writeText(location.origin+'/room/'+roomId);flash('Invite link copied')};
+  const leave=()=>{socket.emit('leave-room');onLeave('Until next time ❤️')};
+
+  if(!room)return <div className="min-h-screen grid place-items-center"><div className="orb h-12 w-12 rounded-full bg-gradient-to-br from-rose to-wine"/></div>;
+  const me=room.users.find(u=>u.userId===R.uid)||{},other=room.users.find(u=>u.userId!==R.uid),both=other?.connected;
+  const status=!both?'Waiting for them…':/failed|disconnected/.test(link)?'Disconnected':link==='connecting'?'Connecting...':'Connected';
+  const tone=status==='Connected'?'text-emerald-400':status==='Disconnected'?'text-red-400':'text-amber-300';
+  const sharer=other?.isScreenSharing?other.displayName:null,tileCls='w-28 h-20 sm:w-44 sm:h-32';
+  const camTiles=<>
+    <Tile stream={rCam} label={other?.displayName||'Waiting…'} avatar={other?.avatar||'♡'} muted speaking={theirSpeak} className={tileCls}/>
+    <Tile stream={lCam} label="You" avatar={me.avatar} muted mirror speaking={mySpeak} className={tileCls}/></>;
+
+  return <div className="min-h-screen pb-28 fade">
+    {heart>0&&<div key={heart} className="heart">♡</div>}
+    {toast&&<div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass px-5 py-2 text-sm fade">{toast}</div>}
+    {!window.isSecureContext&&<div className="mx-4 mt-3 rounded-xl bg-amber-500/15 border border-amber-400/30 px-4 py-2 text-sm">Camera, microphone and screen sharing need a secure page. Open <a className="underline" href={'https://'+location.hostname+':3443/room/'+roomId}>https://{location.hostname}:3443/room/{roomId}</a> instead.</div>}
+    <header className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-8 py-4">
+      <div><div className="font-serif text-lg">♡ {room.roomName}</div><div className="text-xs text-cream/50"><span className={tone}>● {status}</span>{status==='Connected'?' · Distance: irrelevant.':''}</div></div>
+      <div className="flex items-center gap-5"><Avatar u={me} speaking={mySpeak}/>{other&&<Avatar u={other} speaking={theirSpeak}/>}</div>
+      <div className="flex gap-2"><Btn onClick={copy}>Copy Invite</Btn><Btn onClick={()=>{setSf({roomName:room.roomName,displayName:me.displayName,password:''});setSettings(true)}}>⚙</Btn></div>
+    </header>
+    <main className="px-4 md:px-8 grid lg:grid-cols-[1fr_360px] gap-4">
+      <section ref={stageRef} className="glass overflow-hidden aspect-video relative bg-black/30 grid place-items-center">
+        {rScreen?<>
+          <Vid stream={rScreen} data-main="1" className="w-full h-full object-contain bg-black"/>
+          <div className="absolute top-3 left-3 glass px-3 py-1 text-xs">{sharer||'They are'} {sharer?'is sharing their screen ❤️':'sharing'}</div>
+          <button className="absolute top-3 right-3 glass px-3 py-1 text-xs" onClick={()=>stageRef.current.querySelector('video[data-main]')?.requestFullscreen?.()}>⛶</button>
+          <Pip>{camTiles}</Pip></>
+        :sharing?<><div className="text-center p-6"><div className="font-serif text-xl mb-2">You're sharing your screen ❤️</div><p className="text-sm text-cream/60 mb-4">{both?'They can see it now.':'Waiting for them to arrive.'}</p><Vid stream={lScreen} muted className="w-48 mx-auto rounded-xl mb-4 border border-white/10"/><Btn v="danger" onClick={stopShare}>Stop Sharing</Btn></div><Pip>{camTiles}</Pip></>
+        :(lCam||rCam||!help)?<>
+          <Tile stream={rCam} label={other?.displayName||'Waiting…'} avatar={other?.avatar||'♡'} muted speaking={theirSpeak} className="absolute inset-0 !rounded-none !border-0"/>
+          <Pip><Tile stream={lCam} label="You" avatar={me.avatar} muted mirror speaking={mySpeak} className={tileCls}/></Pip></>
+        :<div className="p-6 max-w-md text-left relative"><button className="absolute -top-1 right-0 text-cream/40 hover:text-cream" onClick={()=>setHelp(false)}>✕</button>
+          <div className="font-serif text-2xl mb-3">Ready to watch?</div><ol className="text-sm text-cream/75 space-y-1.5 list-decimal pl-5"><li>Turn on your <b>Camera</b> and <b>Microphone</b>.</li><li>Open your movie/video and click <b>Share Screen</b>.</li><li>Select the window or screen.</li><li>Start the movie.</li><li>Talk and chat while watching together. ❤️</li></ol></div>}
+      </section>
+      <section className="glass flex flex-col h-[50vh] lg:h-auto lg:min-h-[420px]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">{msgs.length===0&&<p className="text-center text-cream/30 text-sm mt-6">Say something sweet.</p>}
+          {msgs.map(m=>{const mine=m.from===R.uid;return <div key={m.id} className={cls('fade max-w-[85%]',mine?'ml-auto text-right':'')}><div className="text-xs text-cream/40 mb-0.5">{m.name} · {new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+            <div className={cls('inline-block rounded-2xl px-4 py-2 text-sm text-left break-words',mine?'bg-wine/70':'bg-white/10 border border-white/10')}>{m.text}</div></div>})}<div ref={endRef}/></div>
+        <div className="p-3 border-t border-white/10">
+          <div className="flex gap-1 mb-2">{['❤️','😂','🥹','🍿','✨','🌙'].map(e=><button key={e} onClick={()=>setText(t=>t+e)} className="hover:scale-125 transition">{e}</button>)}</div>
+          <div className="flex gap-2"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} maxLength={500} placeholder="Write a message…" className="flex-1 rounded-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm outline-none focus:border-rose/60"/><Btn v="primary" onClick={send}>Send</Btn></div></div>
+      </section>
+    </main>
+    <Aud stream={rMic}/>
+    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 glass !rounded-full px-2 py-2 flex gap-1.5 max-w-[96vw]">
+      <Btn v={lCam?'primary':'ghost'} onClick={toggleCamera} title="Camera">🎥<span className="hidden sm:inline"> Camera {lCam?'on':'off'}</span></Btn>
+      <Btn v={micOn&&!muted?'primary':'ghost'} onClick={toggleVoice} title="Microphone">{micOn&&!muted?'🎙':'🔇'}<span className="hidden sm:inline"> Mic {micOn&&!muted?'on':'off'}</span></Btn>
+      <Btn v={sharing?'danger':'ghost'} onClick={share} title="Screen share">🖥<span className="hidden sm:inline"> {sharing?'Stop Sharing':'Share Screen'}</span></Btn>
+      <Btn className="lg:hidden" onClick={()=>endRef.current?.scrollIntoView()} title="Chat">💬</Btn>
+      <Btn v="danger" onClick={leave} title="Leave">⏻<span className="hidden sm:inline"> Leave</span></Btn>
+    </nav>
+    {settings&&<div className="fixed inset-0 z-50 bg-black/60 grid place-items-center px-4" onClick={()=>setSettings(false)}><div className="glass p-6 w-full max-w-sm bg-ink" onClick={e=>e.stopPropagation()}>
+      <h3 className="font-serif text-xl mb-4">Room settings</h3>
+      <Field label="Room name" value={sf.roomName} maxLength={40} onChange={e=>setSf({...sf,roomName:e.target.value})}/>
+      <Field label="Your display name" value={sf.displayName} maxLength={24} onChange={e=>setSf({...sf,displayName:e.target.value})}/>
+      {room.host===R.uid&&<Field label={room.hasPassword?'New password (blank = remove)':'Room password'} type="password" value={sf.password} onChange={e=>setSf({...sf,password:e.target.value})}/>}
+      <p className="text-xs text-cream/40 mb-4">Camera, microphone and screen-sharing choices are made in your browser's own permission prompts.</p>
+      <div className="flex gap-2 justify-end"><Btn onClick={()=>setSettings(false)}>Cancel</Btn><Btn v="primary" onClick={()=>{socket.emit('update-room',{roomName:sf.roomName,displayName:sf.displayName,...(room.host===R.uid&&(sf.password||room.hasPassword)?{password:sf.password}:{})});setSettings(false)}}>Save</Btn></div></div></div>}
+  </div>;
+}
+
+/* ---------- App ---------- */
+function App(){
+  const m=location.pathname.match(/^\/room\/([A-Za-z0-9]{6})\/?$/),rid0=m?m[1].toUpperCase():'';
+  const saved=rid0&&JSON.parse(sessionStorage.getItem('msb:'+rid0)||'null');
+  const [page,setPage]=useState(saved?'room':m?'join':'home'),[ctx,setCtx]=useState({roomId:rid0,name:saved?.name||'',password:''}),[err,setErr]=useState(''),[note,setNote]=useState('');
+  const enter=(roomId,name,password='')=>{setCtx({roomId,name,password});setErr('');history.pushState({},'','/room/'+roomId);setPage('room')};
+  const home=()=>{history.pushState({},'','/');setPage('home')};
+  if(page==='home')return <>{note&&<div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass px-5 py-2 text-sm fade">{note}</div>}<Home go={setPage}/></>;
+  if(page==='create')return <Create back={home} onCreated={(id,f)=>{setCtx({roomId:id,name:f.name,password:f.password});setPage('invite')}}/>;
+  if(page==='invite')return <Invite roomId={ctx.roomId} back={home} enter={()=>enter(ctx.roomId,ctx.name,ctx.password)}/>;
+  if(page==='join')return <Join initial={ctx.roomId} error={err} back={home} onJoin={enter}/>;
+  return <Room key={ctx.roomId} {...ctx} onLeave={t=>{home();setNote(t);setTimeout(()=>setNote(''),3500)}} onError={e=>{sessionStorage.removeItem('msb:'+ctx.roomId);setErr(ERR[e]||'Something went wrong.');setPage('join')}}/>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
